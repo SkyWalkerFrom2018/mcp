@@ -5,7 +5,7 @@ description = "Default template for PDM package"
 authors = [
     {name = "ITCamel", email = "it.camel@gmail.com"},
 ]
-dependencies = ["llama-index>=0.12.23"]
+dependencies = ["llama-index>=0.12.23", "fastapi>=0.115.11"]
 requires-python = "==3.12.*"
 readme = "README.md"
 license = {text = "MIT"}
