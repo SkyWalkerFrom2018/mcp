@@ -8,6 +8,7 @@ from llama_index.core import (
     StorageContext,
     VectorStoreIndex,
     Document,
+    Node,
 )
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
@@ -91,51 +92,63 @@ def get_qwen_llm(model_name="Qwen/Qwen-7B-Chat", device="cuda"):
             logging.error(f"加载所有Qwen模型失败: {str(e2)}")
             raise
 
-class DocumentIndex(BaseIndex):
-    """文档向量索引实现"""
+class DocumentStore(BaseIndex):
+    """专注文档存储管理的实现"""
     
     def __init__(
         self,
-        service_context: Optional[Settings] = None,
-        storage_context: Optional[StorageContext] = None,
-        persist_dir: Optional[str] = None,
         node_parser: Optional[Any] = None,
-        embedding_model: Optional[str] = "BAAI/bge-large-zh-v1.5",
-        llm_model: Optional[str] = "Qwen/Qwen-7B-Chat",
-        device: str = "cuda"
+        **kwargs
     ):
-        """初始化文档索引
-        
-        Args:
-            service_context: LlamaIndex服务上下文
-            storage_context: LlamaIndex存储上下文
-            persist_dir: 索引持久化目录
-            node_parser: 节点解析器
-            embedding_model: 嵌入模型名称
-            llm_model: LLM模型名称
-            device: 设备，"cuda"或"cpu"
-        """
-        super().__init__(
-            service_context=service_context,
-            storage_context=storage_context,
-            persist_dir=persist_dir
-        )
-        
-        # 使用默认解析器或自定义解析器
-        self.node_parser = node_parser or SentenceSplitter(
-            chunk_size=1024,
-            chunk_overlap=200
-        )
-        
-        self.embedding_model = embedding_model
-        self.llm_model = llm_model
-        self.device = device
-        
+        super().__init__(**kwargs)
+        self.node_parser = node_parser or SentenceSplitter()
+        self.nodes: List[Node] = []
+        self.documents: Dict[str, Document] = {}
+        self._observers = []
+
+    def add_observer(self, callback: Callable):
+        """添加观察者"""
+        self._observers.append(callback)
+
+    def add_document(self, document: Document):
+        """添加文档（增强版）"""
+        super().add_document(document)
+        self._notify_observers("add", [document])
+
+    def _notify_observers(self, event_type: str, documents: List[Document]):
+        """通知观察者"""
+        for callback in self._observers:
+            try:
+                callback(event_type, documents)
+            except Exception as e:
+                logging.error(f"观察者回调失败: {str(e)}")
+
+    @classmethod
+    def from_documents(cls, documents: List[Document], **kwargs) -> "DocumentStore":
+        instance = cls(**kwargs)
+        for doc in documents:
+            instance.add_document(doc)
+        return instance
+
+    def search(
+        self, 
+        query: str, 
+        keyword_filter: Optional[Dict] = None,
+        max_results: int = 10
+    ) -> List[Dict[str, Any]]:
+        """混合搜索（示例实现）"""
+        # 这里可以添加关键字过滤逻辑
+        return [
+            {"doc_id": doc_id, "metadata": doc.metadata}
+            for doc_id, doc in self.documents.items()
+            if query.lower() in doc.text.lower()
+        ][:max_results]
+
     def create_from_documents(
         self,
         documents: List[Document],
         show_progress: bool = True
-    ) -> "DocumentIndex":
+    ) -> "DocumentStore":
         """从LlamaIndex文档创建索引
         
         Args:
@@ -184,7 +197,7 @@ class DocumentIndex(BaseIndex):
         file_paths: Union[str, List[str], Path, List[Path]],
         file_extractor: Optional[Callable] = None,
         show_progress: bool = True
-    ) -> "DocumentIndex":
+    ) -> "DocumentStore":
         """从文件创建索引
         
         Args:
@@ -248,7 +261,7 @@ class DocumentIndex(BaseIndex):
         glob_pattern: str = "**/*.*",
         exclude_hidden: bool = True,
         show_progress: bool = True
-    ) -> "DocumentIndex":
+    ) -> "DocumentStore":
         """从目录创建索引
         
         Args:
@@ -306,10 +319,7 @@ class DocumentIndex(BaseIndex):
             
         return results 
 
-if __name__ == "__main__":
-    index = DocumentIndex(
-        persist_dir="./data/indices",
-        embedding_model="BAAI/bge-large-zh-v1.5",
-        llm_model="Qwen/Qwen-7B-Chat",
-        device="cuda"
-    )
+    def persist(self):
+        """覆盖父类方法实现定制化存储"""
+        # 这里可以添加文档版本管理逻辑
+        super().persist() 
