@@ -5,7 +5,6 @@ import logging
 
 from llama_index.core import (
     Settings,
-    StorageContext,
     VectorStoreIndex,
     Document,
     Node,
@@ -17,6 +16,7 @@ from llama_index.core.readers.download import download_loader
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from mcp.indices.base import BaseIndex
+from mcp.indices.utils import FileLoader
 
 # 辅助函数：获取BGE嵌入模型
 def get_bge_embedding(model_name="BAAI/bge-large-zh-v1.5", device="cuda"):
@@ -198,63 +198,14 @@ class DocumentStore(BaseIndex):
         file_extractor: Optional[Callable] = None,
         show_progress: bool = True
     ) -> "DocumentStore":
-        """从文件创建索引
-        
-        Args:
-            file_paths: 文件路径或路径列表
-            file_extractor: 自定义文件提取器
-            show_progress: 是否显示进度
-            
-        Returns:
-            self，用于链式调用
-        """
-        # 将单个路径转换为列表
-        if isinstance(file_paths, (str, Path)):
-            file_paths = [file_paths]
-            
-        # 转换为字符串路径
-        str_paths = [str(p) for p in file_paths]
-        
-        # 根据文件类型自动选择加载器
-        documents = []
-        for file_path in str_paths:
-            if os.path.isdir(file_path):
-                # 处理目录
-                simple_directory_reader = download_loader("SimpleDirectoryReader")
-                loader = simple_directory_reader(file_path)
-                docs = loader.load_data()
-                documents.extend(docs)
-            else:
-                # 处理单个文件
-                ext = os.path.splitext(file_path)[1].lower()
-                
-                if file_extractor:
-                    # 使用自定义提取器
-                    docs = file_extractor(file_path)
-                    documents.extend(docs)
-                elif ext == '.pdf':
-                    # PDF文件
-                    pdf_reader = download_loader("PDFReader")
-                    loader = pdf_reader()
-                    docs = loader.load_data(file=file_path)
-                    documents.extend(docs)
-                elif ext in ['.docx', '.doc']:
-                    # Word文件
-                    docx_reader = download_loader("DocxReader")
-                    loader = docx_reader()
-                    docs = loader.load_data(file=file_path)
-                    documents.extend(docs)
-                elif ext in ['.txt', '.md']:
-                    # 文本文件
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        text = f.read()
-                    document = Document(text=text, metadata={"source": file_path})
-                    documents.append(document)
-                else:
-                    logging.warning(f"不支持的文件类型: {file_path}")
-        
+        """从文件创建索引（优化版）"""
+        # 使用统一的文件加载工具
+        documents = FileLoader.load_files(
+            file_paths=file_paths,
+            file_extractor=file_extractor
+        )
         return self.create_from_documents(documents, show_progress)
-        
+
     def create_from_directory(
         self,
         directory_path: Union[str, Path],
@@ -262,26 +213,13 @@ class DocumentStore(BaseIndex):
         exclude_hidden: bool = True,
         show_progress: bool = True
     ) -> "DocumentStore":
-        """从目录创建索引
-        
-        Args:
-            directory_path: 目录路径
-            glob_pattern: 文件匹配模式
-            exclude_hidden: 是否排除隐藏文件
-            show_progress: 是否显示进度
-            
-        Returns:
-            self，用于链式调用
-        """
-        simple_directory_reader = download_loader("SimpleDirectoryReader")
-        loader = simple_directory_reader(
-            str(directory_path),
-            recursive=True,
-            exclude_hidden=exclude_hidden,
-            file_extractor=None,  # 使用默认提取器
+        """从目录创建索引（优化版）"""
+        # 使用统一的目录加载工具
+        documents = FileLoader.load_directory(
+            directory=directory_path,
+            glob_pattern=glob_pattern,
+            exclude_hidden=exclude_hidden
         )
-        documents = loader.load_data()
-        
         return self.create_from_documents(documents, show_progress)
         
     def query(

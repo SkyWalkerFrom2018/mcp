@@ -1,6 +1,9 @@
 from typing import List, Optional, Any
 from llama_index.core import VectorStoreIndex, StorageContext
 from llama_index.core.schema import Document
+from llama_index.vector_stores.chroma import ChromaVectorStore
+import chromadb
+            
 from .base import BaseIndex
 
 class VectorIndex(BaseIndex):
@@ -18,9 +21,6 @@ class VectorIndex(BaseIndex):
     def _init_vector_store(self):
         """初始化向量存储后端（示例使用Chroma）"""
         if not self.vector_store and self.persist_dir:
-            from llama_index.vector_stores.chroma import ChromaVectorStore
-            import chromadb
-            
             chroma_client = chromadb.PersistentClient(path=self.persist_dir)
             self.vector_store = ChromaVectorStore(
                 chroma_collection=chroma_client.get_or_create_collection("vectors")

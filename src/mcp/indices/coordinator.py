@@ -1,5 +1,4 @@
 from typing import Optional, List, Dict, Any
-from pathlib import Path
 from llama_index.core import Document, Node
 from .document_store import DocumentStore
 from .vector_index import VectorIndex
@@ -66,15 +65,23 @@ class IndexCoordinator:
             self._pending_nodes.clear()
             
             # 持久化存储
-            if self.doc_store.persist_dir:
-                self.doc_store.persist()
-            if self.vector_index.persist_dir:
-                self.vector_index.persist()
+            self.persist()
                 
             return {"status": "success", "updated_nodes": len(all_nodes)}
         except Exception as e:
             logging.error(f"索引同步失败: {str(e)}")
             return {"status": "error", "reason": str(e)}
+
+    def persist(self):
+        """统一持久化管理"""
+        # 优先持久化文档存储
+        if self.doc_store.persist_dir:
+            self.doc_store.persist()
+        
+        # 向量索引仅在独立存储时持久化
+        if (self.vector_index.persist_dir and 
+            self.vector_index.persist_dir != self.doc_store.persist_dir):
+            self.vector_index.persist()
 
     def delete_document(self, doc_id: str) -> Dict[str, Any]:
         """删除文档并同步索引"""
@@ -99,7 +106,6 @@ class IndexCoordinator:
         self,
         query: str,
         mode: str = "hybrid",  # hybrid|vector|keyword
-        **kwargs
     ) -> List[Dict[str, Any]]:
         """统一搜索接口"""
         if mode == "hybrid":
@@ -117,8 +123,6 @@ class IndexCoordinator:
         keyword_results: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """合并混合搜索结果"""
-        # 创建节点ID到得分的映射
-        vector_scores = {res.node.node_id: res.score for res in vector_results}
         
         # 合并逻辑
         merged = []

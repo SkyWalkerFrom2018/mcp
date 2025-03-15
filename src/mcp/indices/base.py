@@ -4,6 +4,8 @@ import os
 import logging
 from abc import ABC, abstractmethod
 
+from mcp.indices.utils import FileLoader
+
 from llama_index.core import (
     ServiceContext,
     StorageContext,
@@ -82,12 +84,10 @@ class BaseIndex(ABC):
     # 新增公共方法
     def create_from_files(self, file_paths: Union[str, List[str], Path, List[Path]], **kwargs):
         """从文件创建索引（公共实现）"""
-        from .utils import FileLoader
         documents = FileLoader.load_files(file_paths)
         return self.from_documents(documents, **kwargs)
 
     def create_from_directory(self, directory_path: Union[str, Path], **kwargs):
         """从目录创建索引（公共实现）"""
-        from .utils import FileLoader
         documents = FileLoader.load_directory(directory_path, **kwargs)
         return self.from_documents(documents, **kwargs) 
