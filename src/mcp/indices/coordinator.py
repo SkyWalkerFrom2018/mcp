@@ -1,5 +1,6 @@
 from typing import Optional, List, Dict, Any
-from llama_index.core import Document, Node
+from llama_index.core import Document
+from llama_index.core.schema import Node
 from .document_store import DocumentStore
 from .vector_index import VectorIndex
 import logging
@@ -39,9 +40,9 @@ class IndexCoordinator:
         documents: List[Document],
         sync: Optional[bool] = None
     ) -> Dict[str, Any]:
-        """添加文档并同步索引"""
+        """添加文档并同步索引（修复结果处理）"""
         # 添加文档到存储
-        result = self.doc_store.add_documents(documents)
+        result = self.doc_store.add_documents(documents) or {}  # 确保始终返回字典
         
         # 根据策略决定是否同步
         should_sync = sync if sync is not None else (self.sync_policy == "auto")

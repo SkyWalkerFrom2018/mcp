@@ -1,118 +1,59 @@
 from typing import List, Dict, Any, Optional, Union, Callable
 from pathlib import Path
-import os
 import logging
+import uuid
 
 from llama_index.core import (
     Settings,
     VectorStoreIndex,
     Document,
-    Node,
 )
 from llama_index.core.node_parser import SentenceSplitter
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.llms.huggingface import HuggingFaceLLM
+from llama_index.core.schema import Node
 from llama_index.core.readers.download import download_loader
-from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from mcp.indices.base import BaseIndex
 from mcp.indices.utils import FileLoader
-
-# 辅助函数：获取BGE嵌入模型
-def get_bge_embedding(model_name="BAAI/bge-large-zh-v1.5", device="cuda"):
-    """获取BGE嵌入模型
-    
-    Args:
-        model_name: 模型名称，可选值包括
-                   BAAI/bge-large-zh-v1.5 (推荐但需要更多资源)
-                   BAAI/bge-small-zh-v1.5 (轻量版)
-        device: 设备，"cuda"或"cpu"
-        
-    Returns:
-        嵌入模型
-    """
-    try:
-        embed_model = HuggingFaceEmbedding(
-            model_name=model_name,
-            device=device,
-            trust_remote_code=True
-        )
-        return embed_model
-    except Exception as e:
-        logging.warning(f"加载BGE模型失败: {str(e)}，尝试使用更小的模型")
-        # 如果大模型加载失败，尝试加载小模型
-        return HuggingFaceEmbedding(
-            model_name="BAAI/bge-small-zh-v1.5",
-            device=device,
-            trust_remote_code=True
-        )
-
-# 辅助函数：获取Qwen LLM模型
-def get_qwen_llm(model_name="Qwen/Qwen-7B-Chat", device="cuda"):
-    """获取Qwen LLM模型
-    
-    Args:
-        model_name: 模型名称，可选较小模型如Qwen/Qwen-1.8B-Chat
-        device: 设备，"cuda"或"cpu"
-        
-    Returns:
-        LLM模型
-    """
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(
-            model_name,
-            trust_remote_code=True,
-            local_files_only=True,
-            revision=None
-        )
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            device_map="auto",
-            trust_remote_code=True,
-            local_files_only=True,
-            revision=None
-        )
-        
-        llm = HuggingFaceLLM(
-            model=model,
-            tokenizer=tokenizer,
-            context_window=2048,
-            max_new_tokens=512,
-            generate_kwargs={
-                "temperature": 0.1,
-                "repetition_penalty": 1.1
-            }
-        )
-        return llm
-    except Exception as e:
-        logging.warning(f"加载Qwen模型失败: {str(e)}，使用较小的Qwen模型")
-        try:
-            return get_qwen_llm("Qwen/Qwen-1.8B-Chat", device)
-        except Exception as e2:
-            logging.error(f"加载所有Qwen模型失败: {str(e2)}")
-            raise
 
 class DocumentStore(BaseIndex):
     """专注文档存储管理的实现"""
     
     def __init__(
         self,
+        service_context: Settings,  # 强制要求传入service_context
+        persist_dir: str,
         node_parser: Optional[Any] = None,
         **kwargs
     ):
-        super().__init__(**kwargs)
+        # 先让基类初始化存储上下文
+        super().__init__(persist_dir=persist_dir, **kwargs)
+        
+        # 然后初始化子类特有属性
+        self.service_context = service_context
         self.node_parser = node_parser or SentenceSplitter()
         self.nodes: List[Node] = []
         self.documents: Dict[str, Document] = {}
         self._observers = []
+        self.index = None
 
     def add_observer(self, callback: Callable):
         """添加观察者"""
         self._observers.append(callback)
 
     def add_document(self, document: Document):
-        """添加文档（增强版）"""
-        super().add_document(document)
+        """独立实现文档添加逻辑"""
+        if not document.doc_id:
+            document.doc_id = str(uuid.uuid4())
+            
+        if document.doc_id in self.documents:
+            raise ValueError(f"文档 {document.doc_id} 已存在，请使用 update_document 方法")
+
+        # 处理节点
+        nodes = self.node_parser.get_nodes_from_documents([document])
+        self.nodes.extend(nodes)
+        
+        # 存储文档
+        self.documents[document.doc_id] = document
         self._notify_observers("add", [document])
 
     def _notify_observers(self, event_type: str, documents: List[Document]):
@@ -149,37 +90,7 @@ class DocumentStore(BaseIndex):
         documents: List[Document],
         show_progress: bool = True
     ) -> "DocumentStore":
-        """从LlamaIndex文档创建索引
-        
-        Args:
-            documents: LlamaIndex文档列表
-            show_progress: 是否显示进度
-            
-        Returns:
-            self，用于链式调用
-        """
-        if not self.service_context:
-            try:
-                # 使用BGE模型做嵌入
-                embed_model = get_bge_embedding(
-                    model_name=self.embedding_model,
-                    device=self.device
-                )
-                
-                # 使用Qwen模型做LLM
-                llm = get_qwen_llm(
-                    model_name=self.llm_model,
-                    device=self.device
-                )
-                
-                Settings.llm = llm
-                Settings.embed_model = embed_model
-                Settings.node_parser = self.node_parser
-                self.service_context = Settings
-            except Exception as e:
-                logging.error(f"创建模型失败: {str(e)}")
-                raise
-        
+        """从LlamaIndex文档创建索引（简化版）"""
         self.index = VectorStoreIndex.from_documents(
             documents,
             service_context=self.service_context,
@@ -191,7 +102,7 @@ class DocumentStore(BaseIndex):
             self.save()
             
         return self
-        
+
     def create_from_files(
         self,
         file_paths: Union[str, List[str], Path, List[Path]],
@@ -261,3 +172,37 @@ class DocumentStore(BaseIndex):
         """覆盖父类方法实现定制化存储"""
         # 这里可以添加文档版本管理逻辑
         super().persist() 
+
+    def as_retriever(self, **kwargs):
+        """实现抽象方法"""
+        if not self.index:
+            raise ValueError("索引尚未创建或加载")
+        return self.index.as_retriever(**kwargs) 
+
+    def add_documents(self, documents: List[Document], batch_size: int = 100) -> Dict[str, Any]:
+        """批量添加文档（返回操作结果）"""
+        results = {
+            "total": len(documents),
+            "success": 0,
+            "errors": []
+        }
+        
+        for doc in documents:
+            try:
+                # 调用当前类的 add_document 方法
+                self.add_document(doc)
+                results["success"] += 1
+            except Exception as e:
+                results["errors"].append({
+                    "doc_id": getattr(doc, 'doc_id', 'unknown'),
+                    "error": str(e)
+                })
+                logging.error(f"添加文档失败: {str(e)}")
+        
+        return results
+    
+    def get_index(self):
+        """获取索引"""
+        if not self.index:
+            self.load()
+        return self.index

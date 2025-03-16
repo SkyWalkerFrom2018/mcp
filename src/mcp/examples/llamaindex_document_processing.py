@@ -1,49 +1,32 @@
+from llama_index.core import Document
 from mcp.indices.document_store import DocumentStore
 from mcp.indices.coordinator import IndexCoordinator
-from llama_index.core import Document, ServiceContextFactory
+from mcp.indices.service_factory import ServiceContextFactory
+
+from mcp.indices.vector_index import VectorIndex
+from src.mcp.indices.document_index import DocumentIndex
 
 if __name__ == "__main__":
-
-    # 创建文档索引 - GPU版本
-    index = DocumentStore(
-        persist_dir="./data/indices",
-        embedding_model="./models/bge-large-zh-v1.5",
-        llm_model="/home/itcamel/Workspace/mcp/models/qwen-7b-int4",
-        device="cuda"
-    )
-
-    # CPU版本（资源有限时）
-    #index_cpu = DocumentIndex(
-    #    persist_dir="./data/indices", 
-    #    embedding_model="BAAI/bge-small-zh-v1.5",
-    #    llm_model="Qwen/Qwen-1.8B-Chat",
-    #    device="cpu"
-    #)
-
-    # 方法1: 从目录加载文档
-    index.create_from_directory(
-        "./data/documents",
-        exclude_hidden=True
-    )
-
-    # 方法2: 从特定文件加载
-    # doc_index.create_from_files([
-    #     "./documents/report.pdf",
-    #     "./documents/article.txt",
-    #     "./documents/paper.docx"
-    # ])
-
-    # 保存索引
-    index.save()
-
-    # 或在另一个应用中加载已有索引
-    # loaded_index = DocumentIndex(persist_dir="./data/document_index")
-    # loaded_index.load()
-
     # 初始化组件
-    service_context = ServiceContextFactory.create()
-    doc_store = DocumentStore(service_context=service_context)
-    vector_index = VectorIndex(service_context=service_context)
+    embedding_model="./models/bge-large-zh-v1.5"
+    llm_model="./models/qwen-7b-int4"
+    service_context = ServiceContextFactory.create(
+        embedding_model=embedding_model,
+        llm_model=llm_model
+    )
+
+    doc_index = DocumentIndex.from_directory(
+        directory="./data/documents",
+        persist_dir="./data/indices",
+        service_context=service_context
+    )
+
+    doc_store = DocumentStore(
+        service_context=service_context,
+        persist_dir="./data/indices"
+    )
+
+    vector_index = VectorIndex(doc_store.get_index(), persist_dir="./data/indices")
 
     # 创建协调器（自动同步模式）
     coordinator = IndexCoordinator(

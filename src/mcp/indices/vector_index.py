@@ -7,51 +7,19 @@ import chromadb
 from .base import BaseIndex
 
 class VectorIndex(BaseIndex):
-    """向量索引实现，处理文档的向量化和检索"""
+    """专注向量检索操作的轻量类"""
     
-    def __init__(
-        self,
-        vector_store: Optional[Any] = None,
-        **kwargs
-    ):
-        super().__init__(**kwargs)
-        self.vector_store = vector_store
-        self._init_vector_store()
-        
-    def _init_vector_store(self):
-        """初始化向量存储后端（示例使用Chroma）"""
-        if not self.vector_store and self.persist_dir:
-            chroma_client = chromadb.PersistentClient(path=self.persist_dir)
-            self.vector_store = ChromaVectorStore(
-                chroma_collection=chroma_client.get_or_create_collection("vectors")
-            )
-        
-    @classmethod
-    def from_documents(
-        cls,
-        documents: List[Document],
-        **kwargs
-    ) -> "VectorIndex":
-        """从文档构建向量索引"""
-        instance = cls(**kwargs)
-        
-        # 构建索引（自动处理分块和向量化）
-        instance.index = VectorStoreIndex.from_documents(
-            documents=documents,
-            storage_context=instance.storage_context,
-            service_context=instance.service_context
-        )
-        return instance
-        
-    def as_retriever(self, similarity_threshold: float = 0.7, top_k: int = 5):
-        """获取检索器"""
+    def __init__(self, index, persist_dir):
+        super().__init__(persist_dir)
+        self.index = index  # 接收已构建好的索引
+
+    def as_retriever(self, **kwargs):
+        """检索入口"""
+        return self.index.as_retriever(**kwargs)
+
+    def hybrid_search(self, query: str, top_k: int = 5):
+        """混合检索示例"""
         return self.index.as_retriever(
-            similarity_threshold=similarity_threshold,
+            vector_store_query_mode="hybrid", 
             top_k=top_k
-        )
-        
-    def persist(self):
-        """持久化向量索引"""
-        if self.persist_dir and self.index:
-            self.storage_context.persist(persist_dir=self.persist_dir)
-        return super().persist()
+        ).retrieve(query)

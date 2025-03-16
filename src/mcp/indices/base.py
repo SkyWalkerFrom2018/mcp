@@ -1,48 +1,83 @@
-from typing import List, Dict, Any, Optional, Union, Callable
-from pathlib import Path
 import os
 import logging
 from abc import ABC, abstractmethod
-
-from mcp.indices.utils import FileLoader
+from typing import List, Dict, Any, Optional
+from pathlib import Path
 
 from llama_index.core import (
-    ServiceContext,
+    Settings,
     StorageContext,
     load_index_from_storage,
     Document,
 )
-
+from llama_index.vector_stores.chroma import ChromaVectorStore
+import chromadb
+from llama_index.core.storage.docstore import SimpleDocumentStore
+from llama_index.core.storage.index_store import SimpleIndexStore
+from llama_index.core.graph_stores import SimpleGraphStore
 class BaseIndex(ABC):
     """索引基类"""
     
     def __init__(
         self,
-        service_context: Optional[ServiceContext] = None,
-        storage_context: Optional[StorageContext] = None,
-        persist_dir: Optional[str] = None,
+        persist_dir: str = "./storage",
+        vector_store_type: str = "chroma",
+        service_context: Settings=None,
+        **kwargs
     ):
-        """初始化基础索引
-        
-        Args:
-            service_context: LlamaIndex服务上下文
-            storage_context: LlamaIndex存储上下文
-            persist_dir: 索引持久化目录
-        """
-        self.service_context = service_context
-        self.storage_context = storage_context or StorageContext()
         self.persist_dir = persist_dir
+        self.vector_store_type = vector_store_type
+        self.service_context = service_context
+        
+        # 初始化核心存储组件
+        self.docstore = SimpleDocumentStore()
+        self.index_store = SimpleIndexStore()
+        self.vector_store = self._create_vector_store()
+        self.graph_store = SimpleGraphStore()
+
+        # 构建存储上下文
+        self.storage_context = StorageContext.from_defaults(
+            vector_stores={"default": self.vector_store},
+            docstore=self.docstore,
+            index_store=self.index_store,
+            graph_store=self.graph_store,
+            persist_dir=self.persist_dir
+        )
         self.index = None
         
-    @classmethod
     @abstractmethod
-    def from_documents(cls, documents: List[Document], **kwargs) -> "BaseIndex":
-        """从文档构建索引（抽象方法）"""
+    def create_from_datasource(self, **kwargs) -> "BaseIndex":
+        """从数据源重新构建索引"""
+        pass
+    
+    @abstractmethod
+    def update(self, documents: List[Document], **kwargs) -> "BaseIndex":
+        """更新索引"""
         pass
 
     @abstractmethod
-    def as_retriever(self, **kwargs):
-        """获取检索器（抽象方法）"""
+    def delete(self, **kwargs) -> "BaseIndex":
+        """删除索引"""
+        pass
+    
+    @abstractmethod
+    def search(
+        self, 
+        query: str, 
+        keyword_filter: Optional[Dict] = None,
+        max_results: int = 10
+    ) -> List[Dict[str, Any]]:
+        """搜索"""
+        pass
+
+    @abstractmethod
+    def query(
+        self, 
+        query_text: str, 
+        similarity_top_k: int = 5,
+        **kwargs
+    ) -> List[Dict[str, Any]]:
+        """查询"""
         pass
 
     def load(self) -> bool:
@@ -56,7 +91,7 @@ class BaseIndex(ABC):
             
         try:
             self.index = load_index_from_storage(
-                StorageContext.from_defaults(persist_dir=self.persist_dir),
+                self.storage_context,
                 service_context=self.service_context
             )
             return True
@@ -81,13 +116,22 @@ class BaseIndex(ABC):
             logging.error(f"保存索引失败: {e}")
             return False 
 
-    # 新增公共方法
-    def create_from_files(self, file_paths: Union[str, List[str], Path, List[Path]], **kwargs):
-        """从文件创建索引（公共实现）"""
-        documents = FileLoader.load_files(file_paths)
-        return self.from_documents(documents, **kwargs)
 
-    def create_from_directory(self, directory_path: Union[str, Path], **kwargs):
-        """从目录创建索引（公共实现）"""
-        documents = FileLoader.load_directory(directory_path, **kwargs)
-        return self.from_documents(documents, **kwargs) 
+    def _create_vector_store(self):
+        """创建向量存储"""
+        if self.vector_store_type == "chroma":
+            # 确保目录存在
+            Path(self.persist_dir).mkdir(parents=True, exist_ok=True)
+            
+            # 显式设置持久化配置
+            chroma_client = chromadb.PersistentClient(
+                path=self.persist_dir,
+                settings=chromadb.config.Settings(
+                    persist_directory=self.persist_dir,
+                    allow_reset=True
+                )
+            )
+            return ChromaVectorStore(
+                chroma_collection=chroma_client.get_or_create_collection("main")
+            )
+        raise ValueError(f"不支持的向量存储类型: {self.vector_store_type}") 
