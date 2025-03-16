@@ -16,7 +16,6 @@ class DocumentIndex(BaseIndex):
     
     def __init__(
         self,
-        service_context: Settings,
         persist_dir: str = "./storage/docs",
         node_parser: Any = None,
         **kwargs
@@ -24,7 +23,7 @@ class DocumentIndex(BaseIndex):
         # 初始化节点解析器
         self.node_parser = node_parser or SentenceSplitter()
         self.nodes: List[Node] = []
-        super().__init__(service_context=service_context, persist_dir=persist_dir, **kwargs)
+        super().__init__(persist_dir=persist_dir, **kwargs)
 
     def create_from_datasource(
         self,
@@ -134,7 +133,7 @@ class DocumentIndex(BaseIndex):
                 self.index = VectorStoreIndex(
                     nodes=nodes,
                     storage_context=self.storage_context,
-                    service_context=self.service_context
+                    service_context=Settings
                 )
             else:
                 # 增量更新节点
@@ -146,7 +145,7 @@ class DocumentIndex(BaseIndex):
             self.index = VectorStoreIndex.from_documents(
                 documents=ref_docs,
                 storage_context=self.storage_context,
-                service_context=self.service_context
+                service_context=Settings
             )
         else:
             # 增量更新文档
@@ -170,14 +169,13 @@ class DocumentIndex(BaseIndex):
         cls,
         directory: Union[str, Path],
         persist_dir: str = "./storage/docs",
-        service_context: Optional[Settings] = None,
         node_parser: Optional[Any] = None,
         **kwargs
     ) -> "DocumentIndex":
         """从目录创建（完整参数版）"""
         return cls(
             persist_dir=persist_dir,
-            service_context=service_context or Settings,
+            service_context= Settings,
             node_parser=node_parser,
             **kwargs
         ).create_from_datasource(
@@ -193,14 +191,13 @@ class DocumentIndex(BaseIndex):
         cls,
         documents: List[Document],
         persist_dir: str = "./storage/docs",
-        service_context: Optional[Settings] = None,
         node_parser: Optional[Any] = None,
         **kwargs
     ) -> "DocumentIndex":
         """从文档列表创建（完整参数版）"""
         return cls(
             persist_dir=persist_dir,
-            service_context=service_context or Settings,
+            service_context= Settings,
             node_parser=node_parser,
             **kwargs
         ).create_from_datasource(
