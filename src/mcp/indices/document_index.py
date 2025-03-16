@@ -8,6 +8,8 @@ from llama_index.core.schema import Node
 from .base import BaseIndex
 from .utils import FileLoader  # 假设已有文件加载工具
 import json
+from llama_index.core.vector_stores import VectorStoreQuery
+from llama_index.core.schema import NodeWithScore
 
 class DocumentIndex(BaseIndex):
     """基于文档数据源的索引实现"""
@@ -93,11 +95,16 @@ class DocumentIndex(BaseIndex):
                 x.metadata.get(k) == v for k, v in keyword_filter.items()
             ))
         
-        # 执行检索
-        retriever = self.index.as_retriever(
+        # 构建统一查询参数
+        query_obj = VectorStoreQuery(
+            query_str=query,
             node_ids=[n.node_id for n in self.nodes],
             filters=filters,
             similarity_top_k=max_results
+        )
+        
+        retriever = self.index.as_retriever(
+            vector_store_query=query_obj  # 统一通过这个参数传递
         )
         return self._format_results(retriever.retrieve(query))
 
@@ -148,13 +155,13 @@ class DocumentIndex(BaseIndex):
                 
         return self.index
 
-    def _format_results(self, nodes: List[Node]) -> List[Dict[str, Any]]:
+    def _format_results(self, nodes: List[NodeWithScore]) -> List[Dict[str, Any]]:
         """统一格式化结果"""
         return [{
-            "content": node.text,
+            "content": node.node.text,
             "score": node.score,
-            "metadata": node.metadata,
-            "doc_id": node.ref_doc_id
+            "metadata": node.node.metadata,
+            "doc_id": node.node.ref_doc_id
         } for node in nodes]
 
     # 便捷构造方法

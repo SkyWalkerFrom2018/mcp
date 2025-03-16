@@ -110,6 +110,7 @@ class BaseIndex(ABC):
             
         try:
             os.makedirs(self.persist_dir, exist_ok=True)
+            self.storage_context.persist(persist_dir=self.persist_dir)
             self.index.storage_context.persist(persist_dir=self.persist_dir)
             return True
         except Exception as e:

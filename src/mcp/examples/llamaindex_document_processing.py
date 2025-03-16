@@ -18,9 +18,14 @@ if __name__ == "__main__":
     doc_index = DocumentIndex.from_directory(
         directory="./data/documents",
         persist_dir="./data/indices",
-        service_context=service_context
+        service_context=service_context,
     )
+    doc_index.save()
+    #doc_index = DocumentIndex(service_context=service_context, persist_dir="./data/indices")
+    #doc_index.load()
 
+    result = doc_index.search("什么是生产管理系统？")
+    print(result)
     doc_store = DocumentStore(
         service_context=service_context,
         persist_dir="./data/indices"
