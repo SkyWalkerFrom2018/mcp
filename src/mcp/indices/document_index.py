@@ -5,18 +5,17 @@ from llama_index.core import VectorStoreIndex
 from llama_index.core import Settings
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.schema import Node
-from .base import BaseIndex
-from .utils import FileLoader  # 假设已有文件加载工具
-import json
 from llama_index.core.vector_stores import VectorStoreQuery
 from llama_index.core.schema import NodeWithScore
+from mcp.indices.base import BaseIndex
+from mcp.indices.utils import FileLoader  # 假设已有文件加载工具
 
 class DocumentIndex(BaseIndex):
     """基于文档数据源的索引实现"""
     
     def __init__(
         self,
-        persist_dir: str = "./storage/docs",
+        persist_dir: str = "",
         node_parser: Any = None,
         **kwargs
     ):
@@ -51,7 +50,7 @@ class DocumentIndex(BaseIndex):
     def update(self, documents: List[Document], **kwargs) -> "DocumentIndex":
         """修复版增量更新"""
         # 删除旧节点
-        doc_ids = [doc.doc_id for doc in documents]
+        doc_ids = [doc.id_ for doc in documents]
         self.nodes = [n for n in self.nodes if n.ref_doc_id not in doc_ids]
         
         # 生成新节点
@@ -60,7 +59,7 @@ class DocumentIndex(BaseIndex):
         
         # 重建索引（关键修改点）
         self.index = self._build_index(nodes=self.nodes)  # 显式传递节点
-        self._notify_observers("update", documents)
+        # self._notify_observers("update", documents)  # 暂时注释该调用
         return self
 
     def delete(self, **kwargs) -> "DocumentIndex":

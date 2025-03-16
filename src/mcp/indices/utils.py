@@ -1,9 +1,9 @@
+import logging
 from pathlib import Path
 from typing import Optional, Union, List, Callable, Dict
 from llama_index.core import Document
 from llama_index.core.readers.base import BaseReader
 from datetime import datetime
-import logging
 from itertools import chain
 import hashlib
 from llama_index.readers.file import PyMuPDFReader, DocxReader, MarkdownReader
@@ -138,5 +138,3 @@ class FileLoader:
         else:
             raise ValueError(f"无效的数据源: {source}")
 
-# 需要安装依赖：
-# pip install pymupdf python-docx llama-index-readers-file

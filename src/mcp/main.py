@@ -1,11 +1,8 @@
-import os
-from indices.document_store import DocumentIndex
-
+from mcp.indices.server import DocumentIndexService
+from mcp.indices.config import Config
 
 if __name__ == "__main__":
-    index = DocumentIndex(
-        persist_dir="./data/indices",
-        embedding_model="BAAI/bge-large-zh-v1.5",
-        llm_model="Qwen/Qwen-7B-Chat",
-        device="cuda"
-    )
+    config = Config()
+    config.create_service_context()
+    service = DocumentIndexService(watch_dir=config.watch_dir)
+    service.start(host=config.host, port=config.port)

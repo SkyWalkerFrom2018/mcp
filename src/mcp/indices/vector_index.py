@@ -4,13 +4,11 @@ from llama_index.core.schema import Document
 from llama_index.vector_stores.chroma import ChromaVectorStore
 import chromadb
             
-from .base import BaseIndex
 
-class VectorIndex(BaseIndex):
+class VectorIndex():
     """专注向量检索操作的轻量类"""
     
-    def __init__(self, index, persist_dir):
-        super().__init__(persist_dir)
+    def __init__(self, index):
         self.index = index  # 接收已构建好的索引
 
     def as_retriever(self, **kwargs):

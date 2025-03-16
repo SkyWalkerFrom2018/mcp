@@ -1,7 +1,7 @@
 from llama_index.core import Document
 from mcp.indices.document_store import DocumentStore
 from mcp.indices.coordinator import IndexCoordinator
-from mcp.indices.service_factory import ServiceContextFactory
+from src.mcp.indices.config import ServiceContextFactory
 
 from mcp.indices.vector_index import VectorIndex
 from src.mcp.indices.document_index import DocumentIndex

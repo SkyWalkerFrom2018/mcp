@@ -1,31 +1,42 @@
 from cmath import e
+import json
 import logging
 from llama_index.core import Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.huggingface import HuggingFaceLLM
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
-class ServiceContextFactory:
-    """服务上下文工厂"""
-    
-    @staticmethod
-    def create(
-        embedding_model: str = "BAAI/bge-large-zh-v1.5",
-        llm_model: str = "Qwen/Qwen-1_8B-Chat",
-        device: str = "cuda"
-    ) -> None:
+class Config:
+    """配置类"""
+
+    def __init__(self):
+        with open("./configs/indices.json", "r") as f:
+            items = json.load(f)
+        self.host = items["host"]
+        self.port = items["port"]
+        self.watch_dir = items["watch_dir"]
+        self.persist_dir = items["persist_dir"]
+        self.vector_store_type = items["vector_store_type"]
+        self.embedding_model = items["embedding_model"]
+        self.device = items["device"]
+        self.chunk_size = items["chunk_size"]
+        self.chunk_overlap = items["chunk_overlap"]
+        self.chunk_size_limit = items["chunk_size_limit"]
+        self.llm_model = items["llm_model"]
+        
+
+    def create_service_context(self) -> None:
         """配置全局设置（新版API要求）"""
         # 直接设置类属性而不是实例化
         Settings.embed_model = HuggingFaceEmbedding(
-            model_name=embedding_model,
-            device=device
+            model_name=self.embedding_model,
+            device=self.device
         )
-        Settings.llm = ServiceContextFactory._create_llm(llm_model, device)
-        Settings.chunk_size = 512  # 直接设置类属性
-        Settings.chunk_overlap = 64
+        Settings.llm = self._create_llm()
+        Settings.chunk_size = self.chunk_size  # 直接设置类属性
+        Settings.chunk_overlap = self.chunk_overlap
 
-    @staticmethod
-    def _create_embedding(model_name: str, device: str) -> HuggingFaceEmbedding:
+    def _create_embedding(self, model_name: str, device: str) -> HuggingFaceEmbedding:
         """创建嵌入模型"""
         try:
             embed_model = HuggingFaceEmbedding(
@@ -43,22 +54,21 @@ class ServiceContextFactory:
             trust_remote_code=True
         )
 
-    @staticmethod
-    def _create_llm(model_name: str, device: str) -> HuggingFaceLLM:
+    def _create_llm(self) -> HuggingFaceLLM:
         """创建LLM"""
         # 转换为绝对路径
         import os
-        abs_model_path = os.path.abspath(model_name)
+        abs_model_path = os.path.abspath(self.llm_model)
         logging.info(f"LLM模型路径: {abs_model_path}")
         try:
             tokenizer = AutoTokenizer.from_pretrained(
-                model_name,
+                self.llm_model,
                 trust_remote_code=True,
                 local_files_only=True,
                 revision=None
             )
             model = AutoModelForCausalLM.from_pretrained(
-                model_name,
+                self.llm_model,
                 device_map="auto",
                 trust_remote_code=True,
                 local_files_only=True,
@@ -77,23 +87,5 @@ class ServiceContextFactory:
             )
             return llm
         except Exception as e:
-            logging.warning(f"加载Qwen模型失败: {str(e)}，使用较小的Qwen模型")
-            try:
-                return ServiceContextFactory._create_llm("Qwen/Qwen-1.8B-Chat", device)
-            except Exception as e2:
-                logging.error(f"加载所有Qwen模型失败: {str(e2)}")
-                raise
-
-# 辅助函数：获取BGE嵌入模型
-def get_bge_embedding(model_name="BAAI/bge-large-zh-v1.5", device="cuda"):
-    """获取BGE嵌入模型
-    
-    Args:
-        model_name: 模型名称，可选值包括
-                   BAAI/bge-large-zh-v1.5 (推荐但需要更多资源)
-                   BAAI/bge-small-zh-v1.5 (轻量版)
-        device: 设备，"cuda"或"cpu"
-        
-    Returns:
-        嵌入模型
-    """
+            logging.warning(f"加载Qwen模型失败: {str(e)}")
+            raise
