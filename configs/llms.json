@@ -1,0 +1,27 @@
+
+{
+    "host": "0.0.0.0",
+    "port": 8001,
+    "provider": "deepseek",
+    "deepseek": {
+        "api_key": "sk-b533d28209894e9bbddd8a768d89b3d9",
+        "base_url": "https://api.deepseek.com/v1",
+        "model": "deepseek-reasoner",
+        "role_prompt": "你是一名财务专家，负责处理财务相关问题。回答要简洁明了，不要出现冗余的解释。",
+        "timeout": 30
+    },
+    "openai": {
+        "api_key": "your_api_key",
+        "base_url": "https://api.openai.com/v1",
+        "model": "gpt-4o",
+        "role_prompt": "你是一名财务专家，负责处理财务相关问题。回答要简洁明了，不要出现冗余的解释。",
+        "timeout": 30
+    },
+    "google": {
+        "api_key": "your_api_key",
+        "base_url": "https://api.google.com/v1",
+        "model": "gemini-1.5-flash",
+        "role_prompt": "你是一名财务专家，负责处理财务相关问题。回答要简洁明了，不要出现冗余的解释。",
+        "timeout": 30
+    }
+}
